@@ -69,6 +69,8 @@ def calc_maximum_rec(k_lists, cum_sum, M):
     return best_res
 
 if __name__ == '__main__':
+    # Test comment
+
     K, M, k_lists = read_input()
     s_max = calc_maximum_loop(k_lists, M)
     print(s_max)
