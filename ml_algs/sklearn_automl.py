@@ -5,7 +5,7 @@ import sklearn.metrics
 
 if __name__ == "__main__":
     # Load dataset
-    X, y = sklearn.datasets.load_digits(return_X_y=True)
+    X, y = sklearn.datasets.load_wine(return_X_y=True)
 
     # Split dataset
     X_train, X_test, y_train, y_test = \
