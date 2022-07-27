@@ -2,6 +2,7 @@ import sklearn.model_selection
 import sklearn.datasets
 import sklearn.metrics
 from sklearn.ensemble import AdaBoostClassifier
+from sklearn import preprocessing
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -10,6 +11,8 @@ from sklearn.datasets import load_breast_cancer
 from sklearn.decomposition import PCA
 from sklearn import datasets
 from sklearn.preprocessing import StandardScaler
+from scipy.stats import zscore
+from sklearn.pipeline import make_pipeline
 import matplotlib
 #matplotlib.use("TkAgg")
 #matplotlib.interactive(True)
@@ -19,21 +22,50 @@ np.set_printoptions(precision=3, suppress=True)
 
 # Full classification
 
-def evaluate_algo(X, y, clf):
-    y_hat_tst = clf.predict(X_test)
-    print("Accuracy_score", sklearn.metrics.accuracy_score(y_test, y_hat_tst))
+def evaluate_algo(X, y, pipe):
+    y_hat_tst = pipe.predict(X)
+    # Doesn't say anything, need to
+    print("MSE", sklearn.metrics.mean_squared_error(y, y_hat_tst))
 
 def train_algo(X, y):
-    # Split dataset
+    # Define and fit GradientBoost classifier
+    pipe = make_pipeline(StandardScaler(), sklearn.ensemble.GradientBoostingRegressor())
+    pipe.fit(X, y)
 
-
-    # Define and fit automl classifier
-    clf = AdaBoostClassifier()
-    clf.fit(X_train, y_train)
-
+    return pipe
 
 def preprocess_dataset(X, y):
-    pass
+    ds_df = pd.DataFrame(X)
+    ds_df["targets"] = y
+
+    # Remove nans
+    ds_df.dropna(inplace=True)
+
+    def remove_outliers_by_std(ds_df):
+        # Remove outliers by rejecting values outside n_std deviations
+        for col in ds_df.columns:
+            mean = ds_df[col].mean()
+            std = ds_df[col].std()
+
+            n_std = 3
+            ds_df = ds_df[(ds_df[col] - mean) < std * n_std]
+        return ds_df
+
+    def remove_outliers_by_zscores(ds_df):
+        z_scores = zscore(ds_df)
+        abs_z_scores = np.abs(z_scores)
+        n_z = 3
+        filtered_entries = (abs_z_scores < n_z).all(axis=1)
+        return ds_df[filtered_entries]
+
+    ds_df = remove_outliers_by_std(ds_df)
+    #ds_df_z = remove_outliers_by_zscores(ds_df)
+
+    # Normalize features (whiten)
+    X = ds_df[filter(lambda x: x != "targets", ds_df.columns)].to_numpy()
+    y = ds_df["targets"].to_numpy()[:, np.newaxis]
+
+    return X, y
 
 def explore_dataset(X, y):
     assert len(X) == len(y)
@@ -66,7 +98,7 @@ def explore_dataset(X, y):
     print(S)
     print()
 
-    # TODO: Do eigenvalues scale in this way?
+    # TODO: Does eigenvalue magnitude represent information content?
     print("Eigenvalues of the individual features as cumulative percentages")
     print(100 * S.cumsum() / S.sum())
     print()
@@ -123,7 +155,6 @@ def plot_3D_PCA(X, y):
     ax.legend()
     plt.show()
 
-
 if __name__ == "__main__":
     # Load real dataset
     X, y = sklearn.datasets.fetch_california_housing(return_X_y=True)
@@ -135,11 +166,11 @@ if __name__ == "__main__":
     X_pp, y_pp = preprocess_dataset(X, y)
 
     # Split dataset
-    #X_train, X_test, y_train, y_test = \
-    #    sklearn.model_selection.train_test_split(X_pp, y_pp, random_state=1)
+    X_train, X_test, y_train, y_test = \
+        sklearn.model_selection.train_test_split(X_pp, y_pp, random_state=1)
 
     # Training:
-    #train_algo(X_train, y_train)
+    pipe = train_algo(X_train, y_train)
 
     # Evaluate result
-    #evaluate_algo(X_test, y_test)
+    evaluate_algo(X_test, y_test, pipe)
