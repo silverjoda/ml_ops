@@ -82,7 +82,7 @@ def preprocess_data_into_hours(df):
 
 
 # Define parameters:
-C_p = 45. # Current market price
+C_p = 30. # Current market price #
 data = [] # Historical data
 V_co = 90. # Compensation value declared by operator
 thresh = 0. # Threshold below which we don't consider the transaction to be interesting
