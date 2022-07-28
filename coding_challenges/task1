@@ -1,0 +1,35 @@
+First of all, I would go through the data and identify all the crashes.
+We assume that at t=0 the cars are not crashed, then this induces an ordering
+in the car positions for each car i. We go over each timestep and whenever
+the ordering changes then we can consider this to be a crash.
+
+Task 1:
+- How would I estimate the typical behavior of a car?
+
+Assumptions:
+1) x(i) can only observe x(i+1) and x(i-1) cars, in other words only what
+is in front or behind them.
+2) All cars are instances of the same agent (all have same behavioral models)
+
+At each timestep, for each car we can calculate several features on to which we will fit a statistical model.
+The features will be: The current velocity of the car v(i,t) and both neighboring cars
+v(i+1, t), v(i-1, t) , then the distance between the car i and neighboring cars
+db(i, t), df(i,t), resulting in a complete feature vector fv(i,t).
+We can then fit a predictive or probabilistic model p(v(i, t+1) | fv(i,t))
+for all cars together.
+
+- How would I estimate the prob that a car crashes in the next second?
+We can either use the above model and fit an uncertainty threshold given
+the crash points that we identified earlier to identify when the crash might happen.
+
+Another way that we can approach this:
+We can try to model the whole car chain as a random process, i.e,
+fit a Gaussian or similar process having features fv(t) = (x(1,t),...x(m,t))
+for all m cars. We can use the GP to predict the positions of the cars at each time point starting from
+an initial condition and check the orderings at each time point to see if there is a crash(es).
+We could also perhaps use the uncertainty in the GP, with the reasoning that the if crash points are sparse then
+the GP uncertainty might signify crashes. We can also ommit the ground truth crash points from the fitting process
+which will lead to more uncertainty at those points.
+
+
+Task 2:
