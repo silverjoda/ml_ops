@@ -1,14 +1,10 @@
 import os
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import sklearn.datasets
-import sklearn.metrics
-import sklearn.model_selection
+from sklearn import linear_model
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn import datasets, linear_model
 
 
 def calc_P_co(data_arr_hours, horizon):
@@ -36,7 +32,6 @@ def calc_P_co(data_arr_hours, horizon):
 
     return pred
 
-
 def decide_whether_to_buy(C_p, P_co, V_co, thresh):
     """
     Decide whether it makes sense to buy, given the current price C_p and probability P_co that consumption will be less than mean.
@@ -47,51 +42,6 @@ def decide_whether_to_buy(C_p, P_co, V_co, thresh):
     """
 
     return V_co * P_co - C_p - thresh > 0
-
-def plot_expected_gains_based_on_just_current_price(data, V_co):
-    """
-    Plot predicted probability of compensation (sell high) and the expected gains, given JUST the current price (without historical data).
-    Perhaps there is a trend here, but unlikely.
-    :param data: Data array used for the plots
-    :param V_co: Value at which we will sell high
-    :return:
-    """
-
-    price_arr = None
-    pred_arr = None
-
-    # Make pricing bins
-    price_max = 100
-    n_bins = 10
-    price_bins = np.linspace(0, price_max, n_bins)
-    price_bins_dict = {}
-    pred_bins_dict = {}
-
-    # Go over price bins and add all current prices and predictions that correspond to that bin
-    for i in range(n_bins - 1):
-        bot_lim = price_bins[i]
-        top_lim = price_bins[i+1]
-        price_bins_dict[i] = []
-        pred_bins_dict[i] = []
-        for price, pred in zip(price_arr, pred_arr):
-            if bot_lim <= price < top_lim:
-                price_bins_dict[i].append(price)
-                pred_bins_dict[i].append(pred)
-
-    pred_bin_list = []
-    expected_gain_list = []
-    # Go over both dicts and for each current price bin calculate the probability of compensation
-    for i in range(n_bins - 1):
-        prob_pred = price_bins_dict[i].sum() / float(len(price_bins_dict[i]))
-        pred_bin_list.append(prob_pred)
-        expected_gain_list.append(V_co * prob_pred - (pred_bin_list[i:i+1].sum() * 0.5))
-        # TODO:  We could also use frequencies to quantify the certainty of prediction
-
-    plt.plot(price_bins, pred_bin_list, 'g-', label='prob of selling high')
-    plt.plot(price_bins, expected_gain_list, 'r-', label='expected gains')
-    plt.title("Probability of compensation and expected gains given just current price")
-    plt.legend()
-    plt.show()
 
 def get_data():
     dirname = os.path.dirname(__file__)
