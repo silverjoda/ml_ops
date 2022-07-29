@@ -1,0 +1,27 @@
+Notes on satellite images:
+
+
+- images can be visible, IR + more.
+- IR measures temperature (clouds up higher are colder)
+- IR can be used to measure reflectivity of white masses (clouds and snow)
+- Clouds move, (in comparison to snow, for example), so sequences can be considered
+- What is the cloud detection going to be used for
+- What resolution images are we considering
+- What is the opaqueness of clouds that we are interested in.
+
+
+Satellite image sources (https://www.youtube.com/watch?v=OONjbRAR-TM):
+- Google earth pro (desktop)
+- Zoom earth
+- Sentinel hub Playground
+- World Imagery Wayback
+- Available datasets: Landsat, SPARCS, https://github.com/chrieke/awesome-satellite-imagery-datasets
+
+
+Relevant articles:
+-   Towards On-Board Hyperspectral Satellite Image Segmentation:
+    Understanding Robustness of Deep Learning through
+    Simulating Acquisition Conditions
+    https://www.youtube.com/watch?v=NavxIPPc0uk
+-   Cloud detection on small satellites based on lightweight U-net and image compression
+- Machine Learning for Cloud Cover Detection Using Multispectral Satellite Images
