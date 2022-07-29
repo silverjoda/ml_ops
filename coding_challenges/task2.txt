@@ -1,0 +1,34 @@
+Derivation of decision rule:
+
+V_co: Value of compensation (settlement)
+P_co: Probability of compensation (given past data)
+Cp: Current price
+thresh: Threshold above which we are willing to consider doing the transaction
+
+I understand the problem the following way:
+- We have 0MW of energy and we are considering of buying just 1MW at price of Cp or doing nothing.
+- If we do nothing, we have a net expected gain of 0.
+- If we decide to buy, then if there is settlement (positive consumption) then we receive a gain of (V_co - Cp)
+- If we decide to buy and there is not settlement, then we are forced to sell at 0Eur, meaning a loss equal to Cp.
+
+We should buy iff:
+
+(V_co - Cp) * P_co > Cp * (1 - P_co) + th
+
+=>
+(V_co - Cp) * P_co - Cp * (1 - P_co) - th > 0
+
+=>
+V_co * P_co - Cp * P_co - Cp + Cp * P_co - th > 0 (cancel the Cp * P_co)
+
+=>
+
+Decision rule: V_co * P_co - Cp - th > 0
+We should buy if the decision rule above holds. Now We only have to find P_co given historical data.
+
+How to find P_co given historical data:
+Process the data to get a positive/negative label for each hour for the consumption.
+Fit a regression model or Gaussian process for P(set_t=True | set_(t-1),..set_(t-h)) where set is the whether
+the settlement was made and h is a horizon that is relevant for the current data point.
+
+

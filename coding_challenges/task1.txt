@@ -1,0 +1,57 @@
+First of all, I would go through the data and identify all the crashes.
+We assume that at t=0 the cars are not crashed, then this induces an ordering
+in the car positions for each car i. We go over each timestep and whenever
+the ordering changes then we can consider this to be a crash.
+
+Task 1:
+- How would I estimate the typical behavior of a car?
+
+Assumptions:
+1) x(i) can only observe x(i+1) and x(i-1) cars, in other words only what
+is in front or behind them.
+2) All cars are instances of the same agent (all have same behavioral models)
+
+At each timestep, for each car we can calculate several features on to which we will fit a statistical model.
+The features will be: The current velocity of the car v(i,t) and both neighboring cars
+v(i+1, t), v(i-1, t) , then the distance between the car i and neighboring cars
+db(i, t), df(i,t), resulting in a complete feature vector fv(i,t).
+We can then fit a predictive or probabilistic model p(v(i, t+1) | fv(i,t))
+for all cars together.
+
+- How would I estimate the prob that a car crashes in the next second?
+We can either use the above model and fit an uncertainty threshold given
+the crash points that we identified earlier to identify when the crash might happen.
+
+Another way that we can approach this:
+We can try to model the whole car chain as a random process, i.e,
+fit a Gaussian or similar process having features fv(t) = (x(1,t),...x(m,t))
+for all m cars. We can use the GP to predict the positions of the cars at each time point starting from
+an initial condition and check the orderings at each time point to see if there is a crash(es).
+We could also perhaps use the uncertainty in the GP, with the reasoning that the if crash points are sparse then
+the GP uncertainty might signify crashes. We can also ommit the ground truth crash points from the fitting process
+which will lead to more uncertainty at those points.
+
+
+Task 2:
+
+Firstly I would make a baseline algorithm that tries to hold a simple heuristic: For example, If you are the first car then you can travel at cruise velocity.
+If you are not the first car, hold the car at a distance from the front car (accounting for the +-1 inaccuracy of measurement) which allows you to decelerate
+with the [-2] limit given the current difference between your velocity and forward car's velocity and taking into account that at worst the forward car can also decelerate at [-2].
+This is a strategy that would work for rational agents (which we could see from data how much the behaviors deviate from).
+We could use our fitted behavioral model from above to simulate such a strategy and get an empirical evaluation of the success of getting from 0 to 100.
+
+Another thing that we could do is use our fitted GP process from above, and then at a given time step
+sample an array of actions (-2, -1.9...0.9,1) and simulate the future and pick the action that leads to the least worst
+future (ofcourse this is not that accurate because the GP will be assuming that after the first action we will behave as the rest of the agents).
+
+
+Task 3:
+What other factors would I take into account for a real implementation?
+
+- Time of day can affect behavior of drivers. During the morning people are impatient
+to get to work and tend to not hold adequate distances from the car in front of them, skewing their behavioral model.
+People coming back from work might not be in a hurry, but might not be paying adequate attention.
+
+- Weather. Rainy weather reduces visibility and road traction
+
+- Brand of car behind and front. Different brands have different customer distributions which might have different behavior models.
