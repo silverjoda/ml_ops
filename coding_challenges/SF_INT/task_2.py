@@ -98,8 +98,10 @@ P_co = calc_P_co(data_arr_hours, horizon)
 
 # Calculate using derived decision rule in task2.txt whether we should buy or do nothing.
 should_buy = decide_whether_to_buy(C_p, P_co, V_co, thresh)
+expected_gain = V_co * P_co - C_p
 
 print(f"We should buy the 1MW: {should_buy}")
+print(f"Expected gain: {expected_gain}")
 
 
 

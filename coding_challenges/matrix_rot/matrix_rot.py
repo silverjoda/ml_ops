@@ -1,9 +1,7 @@
+"""
+Matrix rotation challenge from hackerrank (solution times out on 3/10 tests)
+"""
 
-import math
-import os
-import random
-import re
-import sys
 from copy import deepcopy
 
 def rotate(matrix_A, matrix_B):

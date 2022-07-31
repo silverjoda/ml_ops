@@ -1,3 +1,4 @@
+import csv
 import os
 
 import numpy as np
@@ -7,18 +8,22 @@ if not os.path.exists("data"):
     os.mkdir("data")
 
 # Path relative to current directory
-file_name = "data/npy_file.npy"
+file_name = "data/data.csv"
 
 # Robust way of getting filename
 dirname = os.path.dirname(__file__)
 filename = os.path.join(dirname, file_name)
 
 # Make array
-arr = np.arange(10)
+data = np.arange(10)
 
 # Write array to file
-np.save(filename, arr)
+with open(filename, 'w') as file:
+    writer = csv.writer(file)
+    writer.writerow(data)
 
 # Read contents and print
-arr_loaded = np.load(filename)
-print(arr_loaded)
+with open(filename, 'r') as file:
+    reader = csv.reader(file)
+    for row in reader:
+        print(row)
