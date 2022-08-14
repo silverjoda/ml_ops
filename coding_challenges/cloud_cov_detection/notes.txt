@@ -25,3 +25,4 @@ Relevant articles:
     https://www.youtube.com/watch?v=NavxIPPc0uk
 -   Cloud detection on small satellites based on lightweight U-net and image compression
 - Machine Learning for Cloud Cover Detection Using Multispectral Satellite Images
+- Cloud removal in remote sensing images using nonnegative matrix factorization and error correction
