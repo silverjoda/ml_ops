@@ -11,7 +11,7 @@ You can train several epochs on gpu in 10 minutes, which gives a decent baseline
 I've also used post-training static quantization to quantize the UNET to an int8 model which takes up 4 times less memory and is roughly 1.5-2x faster with almost no performance drop. If performance drop is an issue, one can use quantized-aware static training which requires just adding a few more simple steps, and training the model.
 
 # Performance
-The overall performance is good, but there are failure cases on snowy mountains, shown at the very end of the notebook. The dataset also has issues because you get fully cloud covered images whose ground truth says that there are no clouds. It is also difficult to label cloud coverage due to ambiguity so in this regard, the labels are noisy. Also, the ROC curves and AUC look suspiciously good, that's because a very large amount of images are masked and should probably been filtered prior to segmenting.
+The overall performance is good, but there are failure cases on snowy mountains, shown at the very end of the notebook. The dataset also has issues because you get fully cloud covered images whose ground truth says that there are no clouds. It is also difficult to label cloud coverage due to ambiguity so in this regard, the labels are noisy. 
 
 ## Notes
 If you want to run the notebook I recommend at least 24GB of ram (training requires 10 free GB) and a GPU with 6GB (or just reduce the batchsize). I've added cumulative batch training, which means that you can use smaller batch sizes with accumulating gradients which emulate larger batch sizes. This isn't entirely true though because the batch normalization statistics are still calculated on the true minibatches, but this isn't much of an issue.
