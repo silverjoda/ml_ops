@@ -1,6 +1,5 @@
 Notes on satellite images:
 
-
 - images can be visible, IR + more.
 - IR measures temperature (clouds up higher are colder)
 - IR can be used to measure reflectivity of white masses (clouds and snow)
@@ -8,7 +7,7 @@ Notes on satellite images:
 - What is the cloud detection going to be used for
 - What resolution images are we considering
 - What is the opaqueness of clouds that we are interested in.
-
+- JPEG compression is sometimes used for cloud detection
 
 Satellite image sources (https://www.youtube.com/watch?v=OONjbRAR-TM):
 - Google earth pro (desktop)
@@ -16,7 +15,6 @@ Satellite image sources (https://www.youtube.com/watch?v=OONjbRAR-TM):
 - Sentinel hub Playground
 - World Imagery Wayback
 - Available datasets: Landsat, SPARCS, https://github.com/chrieke/awesome-satellite-imagery-datasets
-
 
 Relevant articles:
 -   Towards On-Board Hyperspectral Satellite Image Segmentation:

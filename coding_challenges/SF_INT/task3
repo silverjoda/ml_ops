@@ -1,0 +1,50 @@
+
+1) You have 480 painted cubes:
+
+2 full sides = 2 * 100
++
+2 sides minus the edges = 2 * (100 - 2 * 10)
++ top + bottom minues 4 edges each = 2 * (100 - 4 * 10 )
+
+200 + 160 + 120 = 480
+
+2) Number of hairs is discrete. If there are more dogs than maximum number of hairs, then using the pigeonhole
+principle there will be more than one dog with the same number of hairs. If we assume on dog per person, then we have a bit less than 10 billion dogs.
+There are probably less than that many hairs on a dog. If there are less dogs than maximum amount of hairs on a dog, then it's still very
+likely that there is at least 2 dogs with the same amount of hairs because the amount of hairs on a dog comes from a relatively peaked distribution (with respect to
+the support).
+
+3) Depends heavily on the rationality of each agent (person). If the depth of thinking is roughly 1, then we should choose
+number 50 - 0.5 * 50 . If the depth of thinking of each agent is infinite then the average converges to zero.
+
+4) We assume that the distribution of the speed of each car is symmetric (variance doesn't matter if they are all the same).
+Then starting from the first car (the most forward car), the size of the cluster will depend on the expected length of cars
+that have a *faster* speed than the first. This length will follow a binomial distribution, and will form a cluster.
+The first car that has a slower speed than the cluster will form another cluster. These clusters will act like individual cars and also follow a binomial
+distribution. The expected size of each cluster is equal to the expected to the mean length.
+
+5)Profit = selling price of gold - buying price of silver - buying price of device
+
+6) FN casino:  If I understood correctly, we should play the first game since the expected payoff is more than zero: prob of winning = 0.5 and payoff is 2.1.
+We should bet the maximal amount.
+We shouldn't play the second game.
+
+7) This game involves selection without replacement. The first pick doesn't matter,
+ but should pick from the second deck because at the second pick there is a larger chance of getting a black than from the first deck (25/51) vs (12/25)
+
+8)
+- Total bitcoin worth at current price > 10^12 $
+- ISS = 15 * 10 ^ 9
+- 1 m BTC = 20 * 10^ 9
+
+Price of our BTC covers the new ISS dream, but the question is if you can liquidate all that BTC (restrictions etc).
+Another question is whether you will affect the price by performing the liquidation (probably not that much since its a small percentage of total worth)
+
+9) 3 constraints:  A1 * A2 * A3 = 36,  A1 + A2  + A3 = Num of windows (must a number which is nxm, can't be prime), oldest son is Vojta means that
+there exists an oldest son, meaning that the largest number should be unique.
+I brute forced all factors of 36 which satisfy constraints and I get that  12, 3, 1 and 9, 4, 1 both satisfy (program is in attachment)
+
+10) This is a sequential game. Payoff = 2^N
+Probability of getting sequence of length N is 0.5 ^ N
+Expected payoff Ep = (0.5) ^ N * (2 ^ N).
+I would play the game if I can pay less than the expected payoff Ep.
