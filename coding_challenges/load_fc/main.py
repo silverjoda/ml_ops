@@ -99,6 +99,19 @@ def analyze_dataset(filename):
         #exit()
 
         # Find all duplicates and replace with average
+        unique_sp, cnts_sp = np.unique(df_day["settlement_period"].values, return_counts=True)
+
+        # Calculate the means of the duplicates
+        means = []
+        for u, c in zip(unique_sp, cnts_sp):
+            if c > 1:
+                means.append(df_day[df_day["settlement_period"] == u]["quantity"].mean())
+
+
+
+        # Drop all the duplicates rows
+
+        # Fill in the dropped rows with the mean values
 
         # Go over each sd from 1 to 48 and fill missing values
 

@@ -1,15 +1,22 @@
-import numpy as np
-N = 10000
-n_floors = 10
-nums = np.random.randint(0, n_floors, size=(N, 2))
+import pandas as pd
 
-floor_freqs = np.zeros(n_floors)
+data = {
+  "calories": [420, 380, 390],
+  "duration": [50, 40, 45]
+}
 
-for n in nums:
-    if n[0] == n[1]: continue
-    floor_freqs[min(n): max(n) + 1] += 1
+df = pd.DataFrame(data, index = ["day1", "day2", "day3"])
 
-import matplotlib.pyplot as plt
-plt.plot(floor_freqs)
-plt.show()
+print(df)
 
+df2 = df[0:2]
+
+print(df2)
+
+df3 = df2.drop('day1')
+
+print(df)
+
+print(df2)
+
+print(df3)
