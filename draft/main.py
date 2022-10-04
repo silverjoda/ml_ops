@@ -1,22 +1,6 @@
 import pandas as pd
+import numpy as np
 
-data = {
-  "calories": [420, 380, 390],
-  "duration": [50, 40, 45]
-}
-
-df = pd.DataFrame(data, index = ["day1", "day2", "day3"])
-
-print(df)
-
-df2 = df[0:2]
-
-print(df2)
-
-df3 = df2.drop('day1')
-
-print(df)
-
-print(df2)
-
-print(df3)
+arr = np.array([[1, 2], [4, 5], [7, 8]])
+print(arr.shape)
+df2 = pd.DataFrame(arr,columns=['a', 'b', 'c'])
