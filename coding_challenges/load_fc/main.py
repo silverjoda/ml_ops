@@ -5,6 +5,8 @@ import httplib2
 from bs4 import BeautifulSoup
 SCRIPTING_KEY = "jtpsb0vor47z3mv"
 SERIES_CODE_LOAD = 'B0610'
+SERIES_CODE_WIND_SOLAR_FORECAST = 'B1440'
+SERIES_CODE_WIND_SOLAR_ACTUAL = 'B1630'
 import time
 import datetime
 from dateutil.relativedelta import relativedelta
@@ -18,10 +20,16 @@ import seaborn as sns
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.forecasting.stl import STLForecast
 from statsmodels.tsa.exponential_smoothing.ets import ETSModel
+from statsmodels.tsa.api import SARIMAX, AutoReg
 from statsmodels.tsa.ar_model import AutoReg
 from statsmodels.tools.eval_measures import mse, rmse, rmspe, meanabs, medianbias
 import optuna
 import random
+import torch as T
+import torch.nn as nn
+import torch.functional as F
+from prophet import Prophet
+import math
 
 class STLClassifierWrapper:
     def __init__(self, param_dict):
@@ -36,6 +44,21 @@ class STLClassifierWrapper:
                                      period=48,  # 48
                                      seasonal=self.param_dict["seasonal"],  # 3,7
                                      trend_deg=self.param_dict["trend_deg"])  # 1
+        self.stlf_res = self.stl_model.fit()
+
+    def forecast(self, steps):
+        if self.stlf_res is None:
+            raise Exception("Model not fitted yet")
+        return self.stlf_res.forecast(steps)
+
+class SARIMAXWrapper:
+    def __init__(self, param_dict):
+        self.stl_model = None
+        self.stlf_res = None
+        self.param_dict = param_dict
+
+    def fit(self, trn_data):
+        self.stl_model = SARIMAX(trn_data, order=(1, 0, 0), trend="c")
         self.stlf_res = self.stl_model.fit()
 
     def forecast(self, steps):
@@ -60,6 +83,118 @@ class SameAsYesterdayForecaster:
         forecasted_data_shifted = pd.Series(data=forecasted_data.values, index=forecasted_data.index + 48)
 
         return forecasted_data_shifted
+
+class LSTMForecaster(nn.Module):
+    def __init__(self, obs_dim, act_dim, hid_dim):
+        super(LSTMForecaster, self).__init__()
+        self.obs_dim = obs_dim
+        self.act_dim = act_dim
+        self.hid_dim = hid_dim
+        num_layers = 1
+
+        self.rnn_1 = T.nn.LSTM(input_size=self.obs_dim, hidden_size=self.hid_dim, num_layers=num_layers,
+                               batch_first=True)
+        self.fc1 = T.nn.Linear(self.hid_dim, self.act_dim, bias=True)
+
+    def forward(self, x):
+        x_rs = x.unsqueeze(2)
+        rnn_1, _ = self.rnn_1(x_rs, None)
+        rnn_last = rnn_1[:, -1, :]
+        fc2 = self.fc2(rnn_last)
+        out = F.softmax(fc2, dim=-1)
+        return out
+
+    def train(self, df, n_lag_days=3):
+        # Make training set out of dataframe
+        start_date = datetime.datetime(2022, 3, 1)
+        end_date = datetime.datetime(2022, 9, 1)
+        val_start_date = datetime.datetime(2022, 9, 1)
+        val_end_date = datetime.datetime(2022, 10, 1)
+        trn_df = df.loc[(df["settlement_date"] >= start_date) &
+                        (df["settlement_date"] <= end_date)]
+        val_df = df.loc[(df["settlement_date"] >= val_start_date) &
+                        (df["settlement_date"] <= val_end_date)]
+
+        seq_len = 2 * 48 + 24 # 2 days conditioning + 12 hours forcasting
+
+        # delta time
+        delta = datetime.timedelta(days=1)
+
+        # Dataset
+        seq_list = []
+
+        # iterate over range of dates and make training set
+        while (start_date <= end_date):
+            base_idx = df.loc[df["settlement_date"] == start_date].index[0]
+            for j in range(1, 48):
+                seq_df = df.loc[base_idx + j:base_idx + j + seq_len]["quantity"]
+                seq_arr = np.array(seq_df.values)
+                seq_list.append((seq_arr - seq_arr.mean()) / seq_arr.std())
+            start_date += delta
+
+        # Validation dataset
+        seq_list_val = []
+
+        # iterate over range of dates and make test set
+        while (val_start_date <= val_end_date):
+            base_idx = df.loc[df["settlement_date"] == start_date].index[0]
+            for j in range(1, 48):
+                seq_df = df.loc[base_idx + j:base_idx + j]["quantity"]
+                seq_arr = np.array(seq_df.values)
+                seq_list_val.append((seq_arr - seq_arr.mean()) / seq_arr.std())
+
+        # Make trainingset into pytorch tensor
+        seq_T = T.gather(seq_list)
+        seq_T_val = T.gather(seq_list_val)
+
+        # Define training tools
+        lossfun = T.nn.MSELoss()
+        optim = T.optim.Adam(self.parameters(), lr=0.001)
+
+        # Do autoregressive training on individual examples (virtual batch)
+        n_iters = 1000
+        virt_batch_size = 24
+
+        n_data = seq_T.shape[0]
+
+        for i in range(n_iters):
+            # Select random seq
+            rnd_idx = np.random.randint(0, n_data)
+            rnd_seq = seq_T[rnd_idx]
+
+            # Forward pass conditioned on input
+            y = self.forward(rnd_seq)
+
+            # Loss on predicted outputs
+            loss = lossfun(y, rnd_seq[-24:, :])
+
+            # Backward pass
+            loss.backward()
+
+            # If enough iters, step gradient
+            if i % virt_batch_size == 0 and i > 0:
+                optim.step()
+                optim.zero_grad()
+
+            # Evaluate
+            if i % 100 == 0:
+                cum_loss = 0
+                for j in range(0, 500, 8):
+                    rnd_seq = seq_T_val[rnd_idx]
+                    y = self.forward(rnd_seq)
+                    cum_loss += lossfun(y, rnd_seq[-24:, :]).data
+                print(f"For iter: {i}/{n_iters}, trn_loss: {loss.data}, val_loss: {cum_loss}")
+
+    def fit(self, trn_data):
+        pass
+
+    def forecast(self):
+        pass
+
+
+
+
+
 
 def read_elexon(date_from, date_to, series_code):
     # Time delta of 1 day. We'll use this to iterate over the dates
@@ -87,7 +222,7 @@ def read_elexon(date_from, date_to, series_code):
         content = BeautifulSoup(content, 'xml')
 
         # Parse the desired quantity out of the XML
-        quantities = [int(d.text) for d in content.find_all('quantity')]
+        quantities = [int(float(d.text)) for d in content.find_all('quantity')]
         settlement_period = [int(d.text) for d in content.find_all('settlementPeriod')]
 
         # Sort the data according to settlement period just to make sure that we have the data in the right order.
@@ -118,6 +253,7 @@ def analyze_dataset(filename):
     quantity_arr = np.array(df['quantity'])
     #plt.plot(quantity_arr)
     #plt.show()
+
 
     # Addfuller stationarity test
     #res = adfuller(df['quantity'])
@@ -218,9 +354,30 @@ def analyze_dataset(filename):
 
     param_dict = get_default_param_dict()
     stl_model = STLClassifierWrapper(param_dict)
+    sarimax_model = SARIMAXWrapper(param_dict)
     say_model = SameAsYesterdayForecaster()
+
+    n_lag_sp = 48 * 120
+    base_idx = df.loc[df["settlement_date"] == datetime.datetime(2022, 9, 1)].index[0]
+    trn_df = df.loc[base_idx - n_lag_sp:base_idx]
+    val_df = df.loc[base_idx:base_idx + 23]
+
+    trn_df = date_and_sp_to_ds(trn_df)
+    val_df = date_and_sp_to_ds(val_df)
+
+    # m = Prophet()
+    # m.fit(trn_df)
+    #
+    # future = m.make_future_dataframe(periods=4)
+    # forecast = m.predict(future)
+    # fig1 = m.plot(forecast)
+    # fig2 = m.plot_components(forecast)
+    #
+    # plt.show()
+    exit()
+
     #print(evaluate_forecasting_model(df, param_dict, stl_model))
-    #print(evaluate_forecasting_model_full(df, param_dict, say_model))
+    #evaluate_forecasting_model_full(df, param_dict, stl_model)
     #exit()
 
     #optimize_stl_forecasting_model(df)
@@ -233,39 +390,18 @@ def analyze_dataset(filename):
     # Try LSTM or similar NN on whole dataset with several days of history and 12h horizon
     # Try incorporate exogenous variables such as information from other available series in the API
 
-    start_date = datetime.datetime(2022, 3, 1)
-    end_date = datetime.datetime(2022, 3, 7)
-    val_start_date = datetime.datetime(2022, 3, 8)
-    val_end_date = datetime.datetime(2022, 3, 8)
-    trn_df = df.loc[(df["settlement_date"] >= start_date) &
-                    (df["settlement_date"] <= end_date)]
-    val_df = df.loc[(df["settlement_date"] >= val_start_date) &
-                    (df["settlement_date"] <= val_end_date)]
-
-    tic = time.perf_counter()
-
-    # TODO: Add exog variables to arima
-    #quantity_arr = np.array(trn_df["quantity"].values)
-    stlf = STLForecast(trn_df["quantity"], ARIMA, model_kwargs=dict(order=(1, 1, 0), trend="t", exog=trn_df["quantity"]), period=48, seasonal=3, trend_deg=1)
-    stlf_res = stlf.fit()
-
-    toc = time.perf_counter()
-    print(f"Done in {toc - tic:0.4f} seconds")
-
-    #print(stlf_res.summary())
-
-    # TODO: Add evaluation
-
-    forecast = stlf_res.forecast(48, exog=val_df["quantity"])
-    plt.plot(trn_df["quantity"], 'b')
-    plt.plot(val_df["quantity"], 'g')
-    plt.plot(forecast, 'r--')
-    plt.show()
+def date_and_sp_to_ds(df):
+    ds_list = []
+    for index, row in df.iterrows():
+        ds_list.append(row['settlement_date'].replace(hour=int(math.floor((row['settlement_period'] -1)/ 2)), minute=int(30 * (row['settlement_period'] % 2 == 0))))
+    df["ds"] = ds_list
+    df["y"] = df["quantity"]
+    return df
 
 def get_default_param_dict():
     param_dict = {}
     param_dict["lossfun"] = rmse
-    param_dict["n_lag_days"] = 3
+    param_dict["n_lag_days"] = 120
     param_dict["seasonal"] = 7
     param_dict["trend_deg"] = 1
     param_dict["arima_order"] = (1, 0, 0)
@@ -336,6 +472,8 @@ def evaluate_forecasting_model(df, param_dict, model):
 
     return cum_error / eval_ctr
 
+
+
 def optimize_forecasting_model(df):
     '''
     Return dict of optimal parameters and optimal cost function
@@ -392,7 +530,11 @@ def testpd():
 
 def main():
     #read_elexon(datetime.date(2022, 3, 1), datetime.date(2022, 9, 30), SERIES_CODE_LOAD)
+    #read_elexon(datetime.date(2022, 3, 1), datetime.date(2022, 3, 7), SERIES_CODE_WIND_SOLAR_ACTUAL)
+    #read_elexon(datetime.date(2022, 3, 1), datetime.date(2022, 3, 7), SERIES_CODE_WIND_SOLAR_FORECAST)
     analyze_dataset("data/series_B0610.xml")
+    #clean_dataset("data/series_B1630.xml")
+    #clean_dataset("data/series_B1440.xml")
     #testpd()
 
 
