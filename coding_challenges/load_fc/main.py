@@ -38,6 +38,10 @@ class STLClassifierWrapper:
         self.param_dict = param_dict
 
     def fit(self, trn_data):
+        # Addfuller stationarity test
+        #res = adfuller(trn_data)
+        #print(res)
+
         self.stl_model = STLForecast(trn_data,
                                      ARIMA,
                                      model_kwargs=dict(order=self.param_dict["arima_order"], trend="t"),
@@ -92,24 +96,51 @@ class LSTMForecaster(nn.Module):
         self.hid_dim = hid_dim
         num_layers = 1
 
-        self.rnn_1 = T.nn.LSTM(input_size=self.obs_dim, hidden_size=self.hid_dim, num_layers=num_layers,
-                               batch_first=True)
+        self.rnn = T.nn.LSTMCell(input_size=self.obs_dim, hidden_size=self.hid_dim)
         self.fc1 = T.nn.Linear(self.hid_dim, self.act_dim, bias=True)
 
     def forward(self, x):
-        x_rs = x.unsqueeze(2)
-        rnn_1, _ = self.rnn_1(x_rs, None)
-        rnn_last = rnn_1[:, -1, :]
-        fc2 = self.fc2(rnn_last)
-        out = F.softmax(fc2, dim=-1)
-        return out
+        # Go over the initial sequence to warmup the rnn
+        hx, cx = self.forward_warmup(x)
+        output = self.forward_forecast(hx, cx, 24)
 
-    def train(self, df, n_lag_days=3):
+        return output
+
+    def forward_forecast(self, hx, cx, seq_len):
+        # This is the autoregression sequence
+        output = []
+        y = self.fc1(hx)
+        for i in range(seq_len):
+            hx, cx = self.rnn(y.detach(), (hx, cx))
+            y = self.fc1(hx)
+            output.append(y)
+        output = T.stack(output, dim=0)[:, :, 0].T
+        return output
+
+    def forward_warmup(self, x):
+        # Make seq dim first
+        x = x.T
+
+        # If output dim is 1 then add artificial dimension
+        if len(x.shape) == 2:
+            x = x.unsqueeze(2)
+
+        seq_len, batch_size = x.size()[0:2]
+        hx = T.randn(batch_size, self.hid_dim)  # (batch, hidden_size)
+        cx = T.randn(batch_size, self.hid_dim)
+
+        # This is the warmup sequence
+        for i in range(seq_len - 24):
+            hx, cx = self.rnn(x[i], (hx, cx))
+
+        return hx, cx
+
+    def train(self, df, n_lag_days=3, n_iters=1000, batch_size=32, lr=0.001):
         # Make training set out of dataframe
         start_date = datetime.datetime(2022, 3, 1)
         end_date = datetime.datetime(2022, 9, 1)
         val_start_date = datetime.datetime(2022, 9, 1)
-        val_end_date = datetime.datetime(2022, 10, 1)
+        val_end_date = datetime.datetime(2022, 9, 26)
         trn_df = df.loc[(df["settlement_date"] >= start_date) &
                         (df["settlement_date"] <= end_date)]
         val_df = df.loc[(df["settlement_date"] >= val_start_date) &
@@ -127,7 +158,7 @@ class LSTMForecaster(nn.Module):
         while (start_date <= end_date):
             base_idx = df.loc[df["settlement_date"] == start_date].index[0]
             for j in range(1, 48):
-                seq_df = df.loc[base_idx + j:base_idx + j + seq_len]["quantity"]
+                seq_df = df.loc[base_idx + j:base_idx + j + seq_len - 1]["quantity"]
                 seq_arr = np.array(seq_df.values)
                 seq_list.append((seq_arr - seq_arr.mean()) / seq_arr.std())
             start_date += delta
@@ -137,64 +168,64 @@ class LSTMForecaster(nn.Module):
 
         # iterate over range of dates and make test set
         while (val_start_date <= val_end_date):
-            base_idx = df.loc[df["settlement_date"] == start_date].index[0]
+            base_idx = df.loc[df["settlement_date"] == val_start_date].index[0]
             for j in range(1, 48):
-                seq_df = df.loc[base_idx + j:base_idx + j]["quantity"]
+                seq_df = df.loc[base_idx + j:base_idx + j + seq_len - 1]["quantity"]
                 seq_arr = np.array(seq_df.values)
                 seq_list_val.append((seq_arr - seq_arr.mean()) / seq_arr.std())
+            val_start_date += delta
 
         # Make trainingset into pytorch tensor
-        seq_T = T.gather(seq_list)
-        seq_T_val = T.gather(seq_list_val)
+        seq_T = T.tensor(seq_list, dtype=T.float32)
+        seq_T_val = T.tensor(seq_list_val, dtype=T.float32)
 
         # Define training tools
         lossfun = T.nn.MSELoss()
-        optim = T.optim.Adam(self.parameters(), lr=0.001)
-
-        # Do autoregressive training on individual examples (virtual batch)
-        n_iters = 1000
-        virt_batch_size = 24
+        optim = T.optim.Adam(self.parameters(), lr=lr)
 
         n_data = seq_T.shape[0]
 
         for i in range(n_iters):
             # Select random seq
-            rnd_idx = np.random.randint(0, n_data)
-            rnd_seq = seq_T[rnd_idx]
+            rnd_ideces = np.random.choice(np.arange(n_data), batch_size)
+            rnd_seqs = seq_T[rnd_ideces]
 
             # Forward pass conditioned on input
-            y = self.forward(rnd_seq)
+            y = self.forward(rnd_seqs)
 
             # Loss on predicted outputs
-            loss = lossfun(y, rnd_seq[-24:, :])
+            loss = lossfun(y, rnd_seqs[:, -24:])
 
             # Backward pass
             loss.backward()
 
             # If enough iters, step gradient
-            if i % virt_batch_size == 0 and i > 0:
+            if i % batch_size == 0 and i > 0:
                 optim.step()
                 optim.zero_grad()
 
             # Evaluate
             if i % 100 == 0:
                 cum_loss = 0
-                for j in range(0, 500, 8):
-                    rnd_seq = seq_T_val[rnd_idx]
-                    y = self.forward(rnd_seq)
-                    cum_loss += lossfun(y, rnd_seq[-24:, :]).data
+                y = self.forward(seq_T_val)
+                cum_loss += lossfun(y, seq_T_val[:, -24:]).data
                 print(f"For iter: {i}/{n_iters}, trn_loss: {loss.data}, val_loss: {cum_loss}")
 
     def fit(self, trn_data):
-        pass
+        trn_data_arr = np.array(trn_data.values)
+        self.mean, self.std = trn_data_arr.mean(), trn_data_arr.std()
+        trn_data_norm = (trn_data_arr - self.mean) / self.std
+        trn_data_norm_T = T.tensor(trn_data_norm, dtype=T.float32).unsqueeze(0)
 
-    def forecast(self):
-        pass
+        self.hx, self.cx = self.forward_warmup(trn_data_norm_T)
+        self.last_index = trn_data.index[-1]
 
-
-
-
-
+    def forecast(self, seq_len):
+        y = self.forward_forecast(self.hx, self.cx, seq_len).detach().numpy()[0]
+        y_denorm = y * self.std + self.mean
+        current_index = self.last_index + 1
+        y_ser = pd.Series(y_denorm, index=range(current_index, current_index + seq_len))
+        return y_ser
 
 def read_elexon(date_from, date_to, series_code):
     # Time delta of 1 day. We'll use this to iterate over the dates
@@ -352,12 +383,15 @@ def analyze_dataset(filename):
     #
     # plt.show()
 
+    lstm_model = LSTMForecaster(obs_dim=1, act_dim=1, hid_dim=32)
+    lstm_model.train(df, n_lag_days=3, n_iters=10000, batch_size=32, lr=0.001)
+
     param_dict = get_default_param_dict()
     stl_model = STLClassifierWrapper(param_dict)
     sarimax_model = SARIMAXWrapper(param_dict)
     say_model = SameAsYesterdayForecaster()
 
-    n_lag_sp = 48 * 120
+    n_lag_sp = 48 * 7
     base_idx = df.loc[df["settlement_date"] == datetime.datetime(2022, 9, 1)].index[0]
     trn_df = df.loc[base_idx - n_lag_sp:base_idx]
     val_df = df.loc[base_idx:base_idx + 23]
@@ -374,11 +408,11 @@ def analyze_dataset(filename):
     # fig2 = m.plot_components(forecast)
     #
     # plt.show()
-    exit()
 
-    #print(evaluate_forecasting_model(df, param_dict, stl_model))
-    #evaluate_forecasting_model_full(df, param_dict, stl_model)
+    #print(evaluate_forecasting_model(df, param_dict, lstm_model))
     #exit()
+    evaluate_forecasting_model_full(df, param_dict, lstm_model)
+    exit()
 
     #optimize_stl_forecasting_model(df)
 
@@ -401,7 +435,7 @@ def date_and_sp_to_ds(df):
 def get_default_param_dict():
     param_dict = {}
     param_dict["lossfun"] = rmse
-    param_dict["n_lag_days"] = 120
+    param_dict["n_lag_days"] = 7
     param_dict["seasonal"] = 7
     param_dict["trend_deg"] = 1
     param_dict["arima_order"] = (1, 0, 0)
@@ -471,8 +505,6 @@ def evaluate_forecasting_model(df, param_dict, model):
             eval_ctr += 1
 
     return cum_error / eval_ctr
-
-
 
 def optimize_forecasting_model(df):
     '''
