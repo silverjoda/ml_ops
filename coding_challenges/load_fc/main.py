@@ -3,7 +3,7 @@ import httplib2
 # These aren't needed, just for this example
 
 from bs4 import BeautifulSoup
-SCRIPTING_KEY = "jtpsb0vor47z3mv"
+SCRIPTING_KEY = "xxxxxxxxxx"
 SERIES_CODE_LOAD = 'B0610'
 SERIES_CODE_WIND_SOLAR_FORECAST = 'B1440'
 SERIES_CODE_WIND_SOLAR_ACTUAL = 'B1630'
